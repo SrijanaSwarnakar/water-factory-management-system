@@ -9,8 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@better-auth/prisma-adapter": "^1.7.6",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "better-auth": "^1.7.6",
     "dotenv": "^17.2.2",
     "next": "16.3.8",
     "pg": "^8.16.3",
@@ -23,10 +25,12 @@
     "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "auth": "^1.7.6",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "type": "module"
