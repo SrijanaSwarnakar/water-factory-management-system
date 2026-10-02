@@ -1,10 +1,11 @@
 import LogoutButton from "@/components/auth/LogoutButton";
-import { requirePermission, type AppRole } from "@/lib/authorization";
-import { prisma } from "@/lib/prisma";
 import {
+  createInternalUser,
   toggleUserActive,
   updateUserRole,
 } from "@/actions/user-management";
+import { requirePermission, type AppRole } from "@/lib/authorization";
+import { prisma } from "@/lib/prisma";
 
 const ROLE_OPTIONS: readonly AppRole[] = [
   "SUPER_ADMIN",
@@ -13,6 +14,10 @@ const ROLE_OPTIONS: readonly AppRole[] = [
   "ACCOUNTANT",
   "DELIVERY_STAFF",
   "USER",
+];
+
+const ALL_ROLES: readonly AppRole[] = [
+  ...ROLE_OPTIONS,
   "CUSTOMER",
 ];
 
@@ -77,8 +82,7 @@ export default async function UsersPage({
             </p>
             <h1 className="mt-1 text-3xl font-bold">User Management</h1>
             <p className="mt-2 text-slate-400">
-              Manage application roles and account activation from the
-              server-side control layer.
+              Create internal accounts and manage roles and account status.
             </p>
           </div>
 
@@ -97,8 +101,111 @@ export default async function UsersPage({
           </div>
         ) : null}
 
+        <section className="mt-8 rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <div>
+            <h2 className="text-xl font-semibold">Create Internal User</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              New internal users can be assigned a business role. Customer
+              portal accounts will be created through the customer module.
+            </p>
+          </div>
+
+          <form action={createInternalUser} className="mt-6 grid gap-4 md:grid-cols-2">
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Full name
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                minLength={2}
+                maxLength={100}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Temporary password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                maxLength={128}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="role"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Role
+              </label>
+              <select
+                id="role"
+                name="role"
+                defaultValue="USER"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-blue-500"
+              >
+                {ROLE_OPTIONS.map((role) => {
+                  const cannotCreateSuperAdmin =
+                    actorRole !== "SUPER_ADMIN" && role === "SUPER_ADMIN";
+
+                  return (
+                    <option
+                      key={role}
+                      value={role}
+                      disabled={cannotCreateSuperAdmin}
+                    >
+                      {role}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white hover:bg-blue-500"
+              >
+                Create User
+              </button>
+            </div>
+          </form>
+        </section>
+
         <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {ROLE_OPTIONS.map((role) => (
+          {ALL_ROLES.map((role) => (
             <div
               key={role}
               className="rounded-xl border border-slate-800 bg-slate-900 p-5"
@@ -130,6 +237,7 @@ export default async function UsersPage({
                   const isSelf = user.id === session.user.id;
                   const isProtectedSuperAdmin =
                     targetRole === "SUPER_ADMIN" && actorRole !== "SUPER_ADMIN";
+                  const isCustomer = targetRole === "CUSTOMER";
 
                   return (
                     <tr key={user.id} className="align-top">
@@ -139,41 +247,51 @@ export default async function UsersPage({
                       </td>
 
                       <td className="px-5 py-5">
-                        <form action={updateUserRole} className="flex gap-2">
-                          <input type="hidden" name="userId" value={user.id} />
+                        {isCustomer ? (
+                          <span className="text-slate-400">
+                            CUSTOMER — managed from customer module
+                          </span>
+                        ) : (
+                          <form action={updateUserRole} className="flex gap-2">
+                            <input
+                              type="hidden"
+                              name="userId"
+                              value={user.id}
+                            />
 
-                          <select
-                            name="role"
-                            defaultValue={targetRole}
-                            disabled={isSelf || isProtectedSuperAdmin}
-                            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label={`Role for ${user.name}`}
-                          >
-                            {ROLE_OPTIONS.map((role) => {
-                              const unavailableToAdmin =
-                                actorRole !== "SUPER_ADMIN" &&
-                                role === "SUPER_ADMIN";
+                            <select
+                              name="role"
+                              defaultValue={targetRole}
+                              disabled={isSelf || isProtectedSuperAdmin}
+                              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                              aria-label={`Role for ${user.name}`}
+                            >
+                              {ROLE_OPTIONS.map((role) => {
+                                const unavailableToAdmin =
+                                  actorRole !== "SUPER_ADMIN" &&
+                                  role === "SUPER_ADMIN";
 
-                              return (
-                                <option
-                                  key={role}
-                                  value={role}
-                                  disabled={unavailableToAdmin}
-                                >
-                                  {role}
-                                </option>
-                              );
-                            })}
-                          </select>
+                                return (
+                                  <option
+                                    key={role}
+                                    value={role}
+                                    disabled={unavailableToAdmin}
+                                  >
+                                    {role}
+                                  </option>
+                                );
+                              })}
+                            </select>
 
-                          <button
-                            type="submit"
-                            disabled={isSelf || isProtectedSuperAdmin}
-                            className="rounded-lg bg-blue-600 px-3 py-2 font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            Save
-                          </button>
-                        </form>
+                            <button
+                              type="submit"
+                              disabled={isSelf || isProtectedSuperAdmin}
+                              className="rounded-lg bg-blue-600 px-3 py-2 font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Save
+                            </button>
+                          </form>
+                        )}
                       </td>
 
                       <td className="px-5 py-5 text-slate-300">
@@ -220,8 +338,7 @@ export default async function UsersPage({
         </section>
 
         <p className="mt-4 text-sm text-slate-500">
-          User accounts are not hard-deleted. Account history remains
-          available, while inactive accounts cannot sign in.
+          User accounts are not hard-deleted. Inactive accounts cannot sign in.
         </p>
       </div>
     </main>
