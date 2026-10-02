@@ -1,5 +1,7 @@
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import {
+  INTERNAL_ROLES,
+  requireRole,
+} from "@/lib/authorization";
 import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
@@ -7,13 +9,21 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  const session = await import("@/lib/authorization").then(({ getCurrentSession }) =>
+    getCurrentSession()
+  );
 
   if (!session) {
     redirect("/login");
   }
+
+  const userRole = session.user.role as string | undefined;
+
+  if (userRole === "CUSTOMER") {
+    redirect("/customer");
+  }
+
+  await requireRole(INTERNAL_ROLES);
 
   return <>{children}</>;
 }
