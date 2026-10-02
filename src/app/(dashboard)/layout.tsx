@@ -1,14 +1,11 @@
-import {
-  INTERNAL_ROLES,
-  requireRole,
-} from "@/lib/authorization";
+import { requirePermission } from "@/lib/authorization";
 
 export default async function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requireRole(INTERNAL_ROLES);
+  await requirePermission("dashboard:view");
 
   return <>{children}</>;
 }
