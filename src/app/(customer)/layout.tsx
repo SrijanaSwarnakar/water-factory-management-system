@@ -1,14 +1,11 @@
-import {
-  CUSTOMER_ROLES,
-  requireRole,
-} from "@/lib/authorization";
+import { requirePermission } from "@/lib/authorization";
 
 export default async function CustomerLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  await requireRole(CUSTOMER_ROLES);
+  await requirePermission("customer-portal:view");
 
   return <>{children}</>;
 }
