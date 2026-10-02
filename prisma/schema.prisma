@@ -132,12 +132,12 @@ enum AuditAction {
 }
 
 model User {
-  id userId String? @unique            String   @id @default(uuid())
+  id            String   @id @default(uuid())
   name          String
   email         String   @unique
   emailVerified Boolean  @default(false)
   image         String?
-  role          UserRole @default(DELIVERY_STAFF)
+  role          UserRole @default(USER)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -237,6 +237,7 @@ model Employee {
 
 model Customer {
   id              String         @id @default(uuid())
+  userId          String?        @unique
   customerCode    String         @unique
   name            String
   type            CustomerType
@@ -255,6 +256,7 @@ model Customer {
   deliveries          Delivery[]                   @relation("CustomerDeliveries")
   returns             Return[]                     @relation("CustomerReturns")
   payments            Payment[]                    @relation("CustomerPayments")
+  user             User?                        @relation(fields: [userId], references: [id], onDelete: SetNull)
   accountTransactions CustomerAccountTransaction[]
 
   @@index([name])
