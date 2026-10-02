@@ -1,27 +1,101 @@
 "use server";
 
+import { hashPassword } from "better-auth/crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { UserRole } from "../../generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { AppRole, requirePermission } from "@/lib/authorization";
+import {
+  AppRole,
+  INTERNAL_ROLES,
+  requirePermission,
+} from "@/lib/authorization";
 
-const VALID_ROLES: readonly AppRole[] = [
+const MANAGEABLE_ROLES: readonly AppRole[] = [
   "SUPER_ADMIN",
   "ADMIN",
   "MANAGER",
   "ACCOUNTANT",
   "DELIVERY_STAFF",
   "USER",
-  "CUSTOMER",
 ];
 
 function redirectWithError(message: string): never {
   redirect(`/users?error=${encodeURIComponent(message)}`);
 }
 
-function isAppRole(value: string): value is AppRole {
-  return VALID_ROLES.includes(value as AppRole);
+function isManageableRole(value: string): value is AppRole {
+  return (MANAGEABLE_ROLES as readonly string[]).includes(value);
+}
+
+export async function createInternalUser(formData: FormData) {
+  const session = await requirePermission("users:manage");
+
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const roleValue = String(formData.get("role") ?? "USER");
+
+  if (name.length < 2 || name.length > 100) {
+    redirectWithError("Name must contain 2 to 100 characters.");
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    redirectWithError("Enter a valid email address.");
+  }
+
+  if (password.length < 8 || password.length > 128) {
+    redirectWithError("Password must contain 8 to 128 characters.");
+  }
+
+  if (!isManageableRole(roleValue)) {
+    redirectWithError("Invalid user role.");
+  }
+
+  const actorRole = session.user.role as AppRole;
+
+  if (roleValue === "SUPER_ADMIN" && actorRole !== "SUPER_ADMIN") {
+    redirectWithError("Only a SUPER_ADMIN can create a SUPER_ADMIN.");
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    redirectWithError("A user with this email already exists.");
+  }
+
+  const passwordHash = await hashPassword(password);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name,
+          email,
+          emailVerified: false,
+          role: roleValue as UserRole,
+          isActive: true,
+        },
+      });
+
+      await tx.account.create({
+        data: {
+          userId: user.id,
+          accountId: user.id,
+          providerId: "credential",
+          password: passwordHash,
+        },
+      });
+    });
+  } catch {
+    redirectWithError("Unable to create the user. Please verify the email and try again.");
+  }
+
+  revalidatePath("/users");
+  redirect("/users?updated=created");
 }
 
 export async function updateUserRole(formData: FormData) {
@@ -30,7 +104,7 @@ export async function updateUserRole(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const roleValue = String(formData.get("role") ?? "");
 
-  if (!userId || !isAppRole(roleValue)) {
+  if (!userId || !isManageableRole(roleValue)) {
     redirectWithError("Invalid user or role.");
   }
 
@@ -43,11 +117,20 @@ export async function updateUserRole(formData: FormData) {
     select: {
       id: true,
       role: true,
+      customer: {
+        select: {
+          id: true,
+        },
+      },
     },
   });
 
   if (!targetUser) {
     redirectWithError("User not found.");
+  }
+
+  if (targetUser.role === "CUSTOMER") {
+    redirectWithError("Customer roles are managed from the customer module.");
   }
 
   const actorRole = session.user.role as AppRole;
@@ -115,3 +198,5 @@ export async function toggleUserActive(formData: FormData) {
   revalidatePath("/users");
   redirect("/users?updated=status");
 }
+
+export { INTERNAL_ROLES };
