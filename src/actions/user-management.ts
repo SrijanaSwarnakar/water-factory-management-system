@@ -199,4 +199,3 @@ export async function toggleUserActive(formData: FormData) {
   redirect("/users?updated=status");
 }
 
-export { INTERNAL_ROLES };
